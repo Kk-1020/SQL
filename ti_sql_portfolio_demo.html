@@ -1,0 +1,305 @@
+
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:var(--font-sans)}
+.wrap{padding:1rem 0}
+.schema-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;margin-bottom:1.5rem}
+.tbl{background:var(--color-background-primary);border:0.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-md);padding:10px 12px}
+.tbl-name{font-size:12px;font-weight:500;color:#185FA5;margin-bottom:6px;letter-spacing:.02em}
+.tbl-col{font-size:11px;color:var(--color-text-secondary);line-height:1.7;font-family:var(--font-mono)}
+.pk{color:#3B6D11;font-weight:500}
+.fk{color:#854F0B}
+.query-list{display:flex;flex-direction:column;gap:8px;margin-bottom:1.5rem}
+.q-btn{background:var(--color-background-primary);border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);padding:10px 14px;text-align:left;cursor:pointer;transition:background .15s}
+.q-btn:hover{background:var(--color-background-secondary)}
+.q-btn.active{border-color:#185FA5;background:#E6F1FB}
+.q-label{font-size:13px;font-weight:500;color:var(--color-text-primary)}
+.q-desc{font-size:12px;color:var(--color-text-secondary);margin-top:2px}
+.code-block{background:var(--color-background-secondary);border:0.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-md);padding:14px;font-family:var(--font-mono);font-size:12px;line-height:1.8;color:var(--color-text-primary);white-space:pre-wrap;margin-bottom:1rem}
+.kw{color:#185FA5;font-weight:500}
+.fn{color:#3B6D11}
+.str{color:#854F0B}
+.run-btn{background:var(--color-background-primary);border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);padding:8px 18px;cursor:pointer;font-size:13px;font-weight:500;color:var(--color-text-primary);margin-bottom:1rem}
+.run-btn:hover{background:var(--color-background-secondary)}
+.results-wrap{overflow-x:auto}
+table.res{width:100%;border-collapse:collapse;font-size:12px}
+table.res th{background:var(--color-background-secondary);padding:7px 10px;text-align:left;font-weight:500;border-bottom:0.5px solid var(--color-border-secondary);color:var(--color-text-secondary);font-size:11px;white-space:nowrap}
+table.res td{padding:7px 10px;border-bottom:0.5px solid var(--color-border-tertiary);color:var(--color-text-primary);white-space:nowrap}
+table.res tr:last-child td{border-bottom:none}
+.badge{display:inline-block;font-size:10px;padding:2px 7px;border-radius:var(--border-radius-md);font-weight:500}
+.badge-ok{background:#EAF3DE;color:#27500A}
+.badge-warn{background:#FAEEDA;color:#633806}
+.badge-bad{background:#FCEBEB;color:#791F1F}
+.section-label{font-size:11px;font-weight:500;color:var(--color-text-tertiary);letter-spacing:.06em;text-transform:uppercase;margin-bottom:8px}
+.divider{border:none;border-top:0.5px solid var(--color-border-tertiary);margin:1.5rem 0}
+</style>
+
+<h2 class="sr-only">Interactive SQL demo: TI semiconductor manufacturing database with 5 runnable queries</h2>
+
+<div class="wrap">
+
+<div class="section-label">Schema — 5 tables</div>
+<div class="schema-grid">
+  <div class="tbl">
+    <div class="tbl-name">wafer_lots</div>
+    <div class="tbl-col"><span class="pk">lot_id</span><br>product_id<br>fab_line<br>start_date<br>wafer_count</div>
+  </div>
+  <div class="tbl">
+    <div class="tbl-name">products</div>
+    <div class="tbl-col"><span class="pk">product_id</span><br>product_name<br>family<br>node_nm<br>target_yield</div>
+  </div>
+  <div class="tbl">
+    <div class="tbl-name">yield_results</div>
+    <div class="tbl-col"><span class="pk">result_id</span><br><span class="fk">lot_id</span><br>test_stage<br>good_dies<br>total_dies<br>tested_date</div>
+  </div>
+  <div class="tbl">
+    <div class="tbl-name">defect_log</div>
+    <div class="tbl-col"><span class="pk">defect_id</span><br><span class="fk">lot_id</span><br>defect_type<br>layer<br>count</div>
+  </div>
+  <div class="tbl">
+    <div class="tbl-name">fab_lines</div>
+    <div class="tbl-col"><span class="pk">fab_line</span><br>location<br>node_nm<br>capacity_wpw</div>
+  </div>
+</div>
+<div style="font-size:11px;color:var(--color-text-tertiary);margin-bottom:1.5rem"><span style="color:#185FA5;font-weight:500">■</span> primary key &nbsp;&nbsp;<span style="color:#854F0B;font-weight:500">■</span> foreign key</div>
+
+<hr class="divider">
+
+<div class="section-label" style="margin-bottom:10px">Queries — click to load</div>
+<div class="query-list" id="qlist"></div>
+
+<div id="code-area" style="display:none">
+  <div class="section-label">SQL</div>
+  <div class="code-block" id="code-display"></div>
+  <button class="run-btn" onclick="runQuery()">Run query</button>
+  <div class="section-label">Results</div>
+  <div class="results-wrap"><div id="result-area"></div></div>
+</div>
+
+</div>
+
+<script>
+const queries = [
+  {
+    label: "1. Yield vs target by product",
+    desc: "JOIN + aggregation — which products are hitting their yield targets?",
+    concepts: ["INNER JOIN","GROUP BY","AVG","HAVING"],
+    sql: `SELECT
+  p.product_name,
+  p.family,
+  p.target_yield,
+  ROUND(AVG(yr.good_dies * 100.0 / yr.total_dies), 1) AS avg_yield_pct,
+  COUNT(DISTINCT wl.lot_id) AS lots_tested
+FROM products p
+INNER JOIN wafer_lots wl
+  ON p.product_id = wl.product_id
+INNER JOIN yield_results yr
+  ON wl.lot_id = yr.lot_id
+WHERE yr.test_stage = 'final'
+GROUP BY p.product_id, p.product_name, p.family, p.target_yield
+HAVING COUNT(DISTINCT wl.lot_id) >= 2
+ORDER BY avg_yield_pct DESC;`,
+    run: () => {
+      return {
+        cols: ["product_name","family","target_yield","avg_yield_pct","lots_tested"],
+        rows: [
+          ["TPS62840","Power Mgmt",92.0,95.3,4],
+          ["OPA2277","Amplifiers",88.0,91.7,3],
+          ["LM5141","Power Mgmt",85.0,87.2,5],
+          ["CC2640R2","Wireless",80.0,81.5,3],
+          ["TMS320F28377","DSP",78.0,74.8,2],
+        ],
+        notes: "TMS320F28377 is 3.2 pts below target — flag for fab review."
+      }
+    }
+  },
+  {
+    label: "2. Top defect types per fab line",
+    desc: "Aggregation + subquery — root cause analysis by production line",
+    concepts: ["LEFT JOIN","GROUP BY","SUM","ORDER BY"],
+    sql: `SELECT
+  wl.fab_line,
+  fl.location,
+  dl.defect_type,
+  dl.layer,
+  SUM(dl.count) AS total_defects,
+  COUNT(DISTINCT wl.lot_id) AS affected_lots
+FROM defect_log dl
+INNER JOIN wafer_lots wl
+  ON dl.lot_id = wl.lot_id
+LEFT JOIN fab_lines fl
+  ON wl.fab_line = fl.fab_line
+GROUP BY wl.fab_line, fl.location, dl.defect_type, dl.layer
+ORDER BY wl.fab_line, total_defects DESC;`,
+    run: () => ({
+      cols: ["fab_line","location","defect_type","layer","total_defects","affected_lots"],
+      rows: [
+        ["FAB1","Dallas, TX","Particle","Metal-2",412,7],
+        ["FAB1","Dallas, TX","Scratch","Oxide",188,3],
+        ["FAB2","Lehi, UT","Particle","Poly",307,5],
+        ["FAB2","Lehi, UT","Pattern","Metal-1",214,4],
+        ["FAB3","Aizu, JP","Particle","Metal-2",98,2],
+      ],
+      notes: "Particle defects on Metal-2 dominate FAB1 — investigate CMP tooling."
+    })
+  },
+  {
+    label: "3. Lots below yield threshold",
+    desc: "Filtering with a JOIN — prioritize lots needing rework",
+    concepts: ["INNER JOIN","WHERE","calculated column","CASE"],
+    sql: `SELECT
+  wl.lot_id,
+  p.product_name,
+  wl.fab_line,
+  wl.start_date,
+  ROUND(yr.good_dies * 100.0 / yr.total_dies, 1) AS yield_pct,
+  p.target_yield,
+  CASE
+    WHEN (yr.good_dies * 100.0 / yr.total_dies) < p.target_yield - 10
+      THEN 'critical'
+    WHEN (yr.good_dies * 100.0 / yr.total_dies) < p.target_yield
+      THEN 'below target'
+    ELSE 'on target'
+  END AS status
+FROM wafer_lots wl
+INNER JOIN products p ON wl.product_id = p.product_id
+INNER JOIN yield_results yr ON wl.lot_id = yr.lot_id
+WHERE yr.test_stage = 'final'
+  AND yr.good_dies * 100.0 / yr.total_dies < p.target_yield
+ORDER BY yield_pct ASC;`,
+    run: () => ({
+      cols: ["lot_id","product_name","fab_line","start_date","yield_pct","target_yield","status"],
+      rows: [
+        ["LOT-0041","TMS320F28377","FAB1","2024-09-03",63.1,78.0,"critical"],
+        ["LOT-0055","TMS320F28377","FAB2","2024-09-17",71.2,78.0,"critical"],
+        ["LOT-0033","CC2640R2","FAB1","2024-08-22",76.4,80.0,"below target"],
+        ["LOT-0062","LM5141","FAB3","2024-10-01",83.7,85.0,"below target"],
+      ],
+      notes: "2 critical lots on TMS320F28377 — both involve FAB1 or FAB2 Particle/Metal-2 issue."
+    })
+  },
+  {
+    label: "4. Fab line utilization summary",
+    desc: "Multi-table JOIN + aggregation — capacity planning view",
+    concepts: ["LEFT JOIN","COUNT","SUM","GROUP BY"],
+    sql: `SELECT
+  fl.fab_line,
+  fl.location,
+  fl.node_nm,
+  fl.capacity_wpw,
+  COUNT(DISTINCT wl.lot_id) AS active_lots,
+  SUM(wl.wafer_count) AS total_wafers,
+  ROUND(SUM(wl.wafer_count) * 100.0 / fl.capacity_wpw, 1) AS utilization_pct
+FROM fab_lines fl
+LEFT JOIN wafer_lots wl
+  ON fl.fab_line = wl.fab_line
+  AND wl.start_date >= DATE('now', '-30 days')
+GROUP BY fl.fab_line, fl.location, fl.node_nm, fl.capacity_wpw
+ORDER BY utilization_pct DESC;`,
+    run: () => ({
+      cols: ["fab_line","location","node_nm","capacity_wpw","active_lots","total_wafers","utilization_pct"],
+      rows: [
+        ["FAB1","Dallas, TX","28nm",5000,18,4320,86.4],
+        ["FAB2","Lehi, UT","12nm",3200,12,2880,90.0],
+        ["FAB3","Aizu, JP","45nm",4000,9,2200,55.0],
+      ],
+      notes: "FAB2 is at 90% — near capacity. FAB3 has headroom for reallocation."
+    })
+  },
+  {
+    label: "5. Product family yield trend",
+    desc: "GROUP BY date period — trend analysis across product families",
+    concepts: ["strftime","GROUP BY","AVG","multi-join"],
+    sql: `SELECT
+  strftime('%Y-%m', yr.tested_date) AS month,
+  p.family,
+  COUNT(DISTINCT wl.lot_id) AS lots,
+  ROUND(AVG(yr.good_dies * 100.0 / yr.total_dies), 2) AS avg_yield
+FROM yield_results yr
+INNER JOIN wafer_lots wl ON yr.lot_id = wl.lot_id
+INNER JOIN products p ON wl.product_id = p.product_id
+WHERE yr.test_stage = 'final'
+GROUP BY month, p.family
+ORDER BY month, p.family;`,
+    run: () => ({
+      cols: ["month","family","lots","avg_yield"],
+      rows: [
+        ["2024-08","Amplifiers",3,91.4],
+        ["2024-08","Power Mgmt",5,88.3],
+        ["2024-09","DSP",2,68.2],
+        ["2024-09","Power Mgmt",6,89.1],
+        ["2024-09","Wireless",3,78.9],
+        ["2024-10","Amplifiers",2,92.1],
+        ["2024-10","DSP",1,76.4],
+        ["2024-10","Power Mgmt",4,91.6],
+      ],
+      notes: "DSP yield recovering in Oct after Sep dip — correlates with defect fix in FAB1."
+    })
+  }
+];
+
+let activeIdx = null;
+
+function badge(val, target) {
+  const n = parseFloat(val);
+  if (typeof target === 'number') {
+    if (n >= target) return `<span class="badge badge-ok">${val}</span>`;
+    if (n >= target - 8) return `<span class="badge badge-warn">${val}</span>`;
+    return `<span class="badge badge-bad">${val}</span>`;
+  }
+  if (val === 'critical') return `<span class="badge badge-bad">${val}</span>`;
+  if (val === 'below target') return `<span class="badge badge-warn">${val}</span>`;
+  if (val === 'on target') return `<span class="badge badge-ok">${val}</span>`;
+  return val;
+}
+
+function renderList() {
+  const el = document.getElementById('qlist');
+  el.innerHTML = queries.map((q, i) => `
+    <button class="q-btn${activeIdx===i?' active':''}" onclick="selectQuery(${i})">
+      <div class="q-label">${q.label}</div>
+      <div class="q-desc">${q.desc}</div>
+      <div style="margin-top:5px;display:flex;gap:4px;flex-wrap:wrap">${q.concepts.map(c=>`<span style="font-size:10px;background:var(--color-background-secondary);padding:1px 6px;border-radius:var(--border-radius-md);color:var(--color-text-secondary);font-family:var(--font-mono)">${c}</span>`).join('')}</div>
+    </button>`).join('');
+}
+
+function syntaxHL(sql) {
+  const kws = ['SELECT','FROM','INNER JOIN','LEFT JOIN','ON','WHERE','GROUP BY','ORDER BY','HAVING','AND','AS','CASE','WHEN','THEN','ELSE','END','ROUND','AVG','COUNT','SUM','DISTINCT','DATE','strftime'];
+  let s = sql.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  kws.forEach(k => {
+    s = s.replace(new RegExp(`\\b${k}\\b`,'g'), `<span class="kw">${k}</span>`);
+  });
+  s = s.replace(/'([^']*)'/g, `<span class="str">'$1'</span>`);
+  return s;
+}
+
+function selectQuery(i) {
+  activeIdx = i;
+  renderList();
+  const q = queries[i];
+  document.getElementById('code-display').innerHTML = syntaxHL(q.sql);
+  document.getElementById('code-area').style.display = 'block';
+  document.getElementById('result-area').innerHTML = '<div style="font-size:12px;color:var(--color-text-tertiary);padding:8px 0">Click Run query to execute</div>';
+}
+
+function runQuery() {
+  if (activeIdx === null) return;
+  const {cols, rows, notes} = queries[activeIdx].run();
+  const yieldIdx = cols.indexOf('avg_yield_pct');
+  const targetIdx = cols.indexOf('target_yield');
+  const statusIdx = cols.indexOf('status');
+  let html = `<table class="res"><thead><tr>${cols.map(c=>`<th>${c}</th>`).join('')}</tr></thead><tbody>`;
+  rows.forEach(r => {
+    html += '<tr>' + r.map((cell,ci) => {
+      if (ci === yieldIdx && targetIdx >= 0) return `<td>${badge(cell, r[targetIdx])}</td>`;
+      if (ci === statusIdx) return `<td>${badge(cell)}</td>`;
+      return `<td>${cell}</td>`;
+    }).join('') + '</tr>';
+  });
+  html += `</tbody></table>`;
+  if (notes) html += `<div style="margin-top:10px;font-size:12px;color:var(--color-text-secondary);padding:8px 12px;background:var(--color-background-secondary);border-radius:var(--border-radius-md);border-left:2px solid #378ADD;border-radius:0">${notes}</div>`;
+  document.getElementById('result-area').innerHTML = html;
+}
+
+renderList();
+</script>
